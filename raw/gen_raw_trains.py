@@ -58,7 +58,34 @@ def gen_raw_michalski_trains(class_rule, out_path, num_entries=10000, with_occlu
     os.remove(generator_tmp)
 
 
-def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusion=False, min_cars=2, max_cars=4):
+def parse_config(distribution_config): 
+    attribute_choices = dict()      
+    attribute_choices["length"] = ['short', 'long']
+    attribute_choices["shape"] = ['rectangle', 'bucket', 'ellipse', 'hexagon', 'u_shaped']
+    attribute_choices["double"] = ['not_double', 'double']
+    attribute_choices["roof"] = ['none', 'arc', 'flat', 'jagged', 'peaked']
+    attribute_choices["l_shape"] = ['rectangle', 'triangle', 'circle', 'diamond', 'hexagon', 'utriangle']
+    if distribution_config is not None: 
+        import json
+        path = os.path.join("../distribution_configs", distribution_config)
+        with open(path, "r") as json_file:
+            json_file = json.load(json_file)
+            attributes = ["angle", "length", "shape", "double", "roof", "l_shape"]
+            for possible_attribute in attributes:
+                try: 
+                    new_attribute_list = json_file[possible_attribute]
+                    assert isinstance(new_attribute_list, list)
+                    for choice in new_attribute_list:
+                        assert choice in attribute_choices[possible_attribute]
+                    attribute_choices[possible_attribute] = new_attribute_list
+                except: 
+                    pass 
+    return attribute_choices
+
+
+
+
+def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusion=False, min_cars=2, max_cars=4, distribution_config = None):
     """ Generate random trains descriptions
     Args:
         out_path: string path to save the generated train descriptions
@@ -68,6 +95,7 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
         max_cars: int maximum number of cars in a train
         min_cars: int minimum number of cars in a train
     """
+    distribution_settings = parse_config(distribution_config) 
     classifier = 'output/tmp/raw/concept_tester_tmp.pl'
     os.makedirs('output/tmp/raw/', exist_ok=True)
     rule_path = f'example_rules/{class_rule}_rule.pl'
@@ -84,14 +112,13 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
     prolog.consult(classifier)
     west_counter = 0
     east_counter = 0
-
     try:
         os.remove(out_path)
     except OSError:
         pass
     os.makedirs(out_path.rsplit('/', 1)[0], exist_ok=True)
     with open(out_path, 'w+') as text_file:
-        while west_counter < num_entries / 2 or east_counter < num_entries / 2:
+        while west_counter < int(math.ceil(num_entries / 2)) or east_counter < int(num_entries / 2):
             t_angle = get_random_angle(with_occlusion)
             train = ''
             m_cars = f''
@@ -101,7 +128,7 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
                 train += ', ' if len(train) > 0 else ''
 
                 n = j + 1
-                length = random.choice(['short', 'long'])
+                length = random.choice(distribution_settings["length"])
 
                 if length == 'long':
                     wheels = random.choice(['2', '3'])
@@ -110,10 +137,10 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
                     wheels = '2'
                     l_num = random.randint(0, 2)
 
-                shape = random.choice(['rectangle', 'bucket', 'ellipse', 'hexagon', 'u_shaped'])
-                double = random.choice(['not_double', 'double'])
-                roof = random.choice(['none', 'arc', 'flat', 'jagged', 'peaked'])
-                l_shape = random.choice(['rectangle', 'triangle', 'circle', 'diamond', 'hexagon', 'utriangle'])
+                shape = random.choice(distribution_settings["shape"])
+                double = random.choice(distribution_settings["double"])
+                roof = random.choice(distribution_settings["roof"])
+                l_shape = random.choice(distribution_settings["l_shape"])
                 car = str(
                     n) + ' ' + shape + ' ' + length + ' ' + double + ' ' + roof + ' ' + wheels + ' ' + l_shape + ' ' + str(
                     l_num)
@@ -139,7 +166,7 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
 
 
 def gen_raw_trains(raw_trains, classification_rule, out_path, num_entries=10000, replace_existing=True,
-                   with_occlusion=False, min_cars=2, max_cars=4):
+                   with_occlusion=False, min_cars=2, max_cars=4, distribution_config = None):
     """ Generate random or Michalski train descriptions
     Args:
         raw_trains: string type of train which is generated available options: 'RandomTrains' and 'MichalskiTrains'
@@ -155,7 +182,7 @@ def gen_raw_trains(raw_trains, classification_rule, out_path, num_entries=10000,
         raise ValueError(f'min_train_length {min_cars} is larger than max_train_length {max_cars}')
     if replace_existing:
         if raw_trains == 'RandomTrains':
-            gen_raw_random_trains(classification_rule, out_path, num_entries, with_occlusion, min_cars, max_cars)
+            gen_raw_random_trains(classification_rule, out_path, num_entries, with_occlusion, min_cars, max_cars, distribution_config = distribution_config)
         elif raw_trains == 'MichalskiTrains':
             gen_raw_michalski_trains(classification_rule, out_path, num_entries, with_occlusion, min_cars, max_cars)
 
@@ -186,8 +213,13 @@ def read_trains(file, toSimpleObjs=False, scale=(.5, .5, .5)):
             #  scale the train to fit the scene (required space = number of cars + engine + free space)
             train_scale = 3 / (train_length + 2) if train_length > 4 else 0.5
         for c in range(train_length):
+            
             ind = c * 8
             # a = (l[ind+i] for i in range(8))
+            print("ATTRIBUTE START PER CAR")
+            print("----------------------------------------")
+            print("{}, {}, {}, {}, {}, {}, {}".format(l[ind + 2], l[ind + 3], l[ind + 4], l[ind + 5], l[ind + 6], l[ind + 7], l[ind + 8]))
+            print("----------------------------------------")
             car = BlenderCar(l[ind + 2], l[ind + 3], l[ind + 4], l[ind + 5], l[ind + 6], l[ind + 7], l[ind + 8],
                              l[ind + 9].strip('\n'), train_scale)
             if toSimpleObjs:

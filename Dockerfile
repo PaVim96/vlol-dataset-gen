@@ -26,6 +26,7 @@ COPY modules/requirements.txt /home/python/requirements.txt
 RUN pip3 install --upgrade pip
 RUN pip3 install -r /home/python/requirements.txt
 RUN pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
+RUN pip3 install ipdb
 RUN ln -s /usr/local/bin/python3.10 /usr/bin/python & ln -s /usr/local/bin/pip3.10 /usr/bin/pip
 
 # set up blender as a python module

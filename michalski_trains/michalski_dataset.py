@@ -87,7 +87,8 @@ class MichalskiDataset(Dataset):
             trans.append(preprocessing)
         if resize:
             print('resize true')
-            trans.append(transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC))
+            #NOTE P.V: changed this because CelebA is 128,128 as well
+            trans.append(transforms.Resize((128, 128), interpolation=transforms.InterpolationMode.BICUBIC))
 
         trans.append(transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
 

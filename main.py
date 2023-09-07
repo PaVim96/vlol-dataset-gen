@@ -21,6 +21,8 @@ def main():
     tag = args.tag + '/' if args.tag != "" else args.tag
 
     # distribution settings
+    distribution_config = args.distribution_config
+
     distribution, replace_symbolics = args.distribution, args.replace_symbolics
     rule = args.classification
     min_cars, max_cars = args.min_train_length, args.max_train_length
@@ -54,7 +56,7 @@ def main():
         # generate raw trains if they do not exist or shall be replaced
         if not os.path.isfile(ds_raw_path) or replace_symbolics:
             gen_raw_trains(distribution, rule, min_cars=min_cars, max_cars=max_cars,
-                           with_occlusion=occ, num_entries=ds_size, out_path=ds_raw_path)
+                           with_occlusion=occ, num_entries=ds_size, out_path=ds_raw_path, distribution_config = distribution_config)
 
         num_lines = sum(1 for _ in open(ds_raw_path))
         if num_lines != ds_size:
@@ -107,6 +109,9 @@ def parse():
                         help='The distribution we want to sample from. Either \'MichalskiTrains\' or \'RandomTrains\'.'
                              'MichalskiTrains are sampled according to distributional assumptions defined by Muggleton.'
                              'RandomTrains are sampled uniformly at random.')
+    parser.add_argument("--distribution_config", type=str, default=None, required=False, help='If passed, expected to be a json config'
+                            'stating which attributes to sample from')
+
     parser.add_argument('--classification', type=str, default='theoryx',
                         help='the classification rule used for generating the labels of the dataset, possible options: '
                              '\'theoryx\', \'easy\', \'color\', \'numerical\', \'multi\', \'complex\', \'custom\'')
