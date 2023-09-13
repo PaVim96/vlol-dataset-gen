@@ -5,6 +5,26 @@ from pyswip import Prolog
 from michalski_trains.m_train import BlenderCar, MichalskiTrain, SimpleCar
 
 
+
+class InterveneDict(dict):
+        def __setitem__(self, key, value):
+            # Remove any previous connections with these values
+            if key in self:
+                del self[key]
+            if value in self:
+                del self[value]
+            dict.__setitem__(self, key, value)
+            dict.__setitem__(self, value, key)
+
+        def __delitem__(self, key):
+            dict.__delitem__(self, self[key])
+            dict.__delitem__(self, key)
+
+        def __len__(self):
+            """Returns the number of connections"""
+            return dict.__len__(self) // 2
+
+
 def gen_raw_michalski_trains(class_rule, out_path, num_entries=10000, with_occlusion=False, min_cars=2, max_cars=4):
     """ Generate Michalski trains descriptions using the Prolog train generator
         labels are derived by the classification rule
@@ -67,8 +87,7 @@ def parse_config(distribution_config):
     attribute_choices["l_shape"] = ['rectangle', 'triangle', 'circle', 'diamond', 'hexagon', 'utriangle']
     if distribution_config is not None: 
         import json
-        path = os.path.join("../distribution_configs", distribution_config)
-        with open(path, "r") as json_file:
+        with open("distribution_configs/{}".format(distribution_config), "r") as json_file:
             json_file = json.load(json_file)
             attributes = ["angle", "length", "shape", "double", "roof", "l_shape"]
             for possible_attribute in attributes:
@@ -96,6 +115,7 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
         min_cars: int minimum number of cars in a train
     """
     distribution_settings = parse_config(distribution_config) 
+    print("Distribution settings are: {}".format(distribution_settings))
     classifier = 'output/tmp/raw/concept_tester_tmp.pl'
     os.makedirs('output/tmp/raw/', exist_ok=True)
     rule_path = f'example_rules/{class_rule}_rule.pl'
@@ -225,7 +245,7 @@ def read_trains(file, toSimpleObjs=False, scale=(.5, .5, .5)):
             if toSimpleObjs:
                 car = SimpleCar(l[ind + 2], l[ind + 3], l[ind + 4], l[ind + 5], l[ind + 6], l[ind + 7], l[ind + 8],
                                 l[ind + 9].strip('\n'), train_scale)
-
+            
             m_cars.append(car)
         train = MichalskiTrain(m_cars, dir, t_angle, train_scale)
         if toSimpleObjs is True:
@@ -233,6 +253,119 @@ def read_trains(file, toSimpleObjs=False, scale=(.5, .5, .5)):
         # t_angle = get_random_angle(with_occlusion, angle)
         m_trains.append(train)
     return m_trains
+
+
+def intervene_train(train):
+    assert len(train.get_cars()) == 1, "more than one car in data"
+    car = train.get_cars()[0]
+
+    inst_cls = type(car)
+    #interventions are: 
+
+    #car_shape: rectangle => bucket
+    #roof: arc => none
+    #direction = west = (length == long) && (shape == rectangle)
+    #length: short => long (sample car_load_num and update direction); long => short (same)
+
+    #return train = [normal_train, intervened_shape, intervened_roof, intervened_length]
+    intervener = InterveneDict()
+    intervener["rectangle"] = "bucket"
+    intervener["short"] = "long"
+    intervener["arc"] = "none"
+
+    def intervened_length(intervened_length, roof):
+        new_dir = None
+        new_car_num_load = None
+        wheels = None
+        if intervened_length == "short": 
+            new_car_num_load = random.randint(0,3)
+            wheels = "2"
+            new_dir = "west"
+        else: 
+            new_car_num_load = random.randint(0,2)
+            wheels = random.choice(["2", "3"])
+            if roof == "rectangle":
+                new_dir = "east"
+            else: 
+                new_dir = "west"
+        return new_car_num_load, wheels, new_dir
+    
+
+
+    dir = train.get_label()
+    angle = train.get_angle()
+    scale = train.get_blender_scale()
+
+    car_num = car.get_car_number()
+    car_shape = car.get_car_shape()
+    car_length = car.get_car_length()
+    car_roof = car.get_car_roof()
+    car_wall = car.get_car_wall()
+    car_wheels = car.get_wheel_count()
+    car_load_num = car.get_load_number()
+    car_l_shape = car.get_load_shape()
+
+    
+
+    #dummy list because train expects a list
+    intervened_length_val = intervener[car_length]
+    new_car_num_load, wheels, new_dir = intervened_length(intervened_length_val, car_roof)
+
+    #shape is not really shape but rather color
+
+    intervened_shape_val = intervener[car_roof]
+    if intervened_shape_val == "arc" and car_length == "long":
+        intervened_shape_res_dir = "east"
+    else: 
+        intervened_shape_res_dir = "west"
+
+    intervened_train_shape = MichalskiTrain([inst_cls(car_num, intervener[car_shape], car_length, car_wall, car_roof, car_wheels, car_l_shape, car_load_num)], dir, angle, scale)    
+    intervened_train_roof = MichalskiTrain([inst_cls(car_num, car_shape, car_length, car_wall, intervener[car_roof], car_wheels, car_l_shape, car_load_num)], intervened_shape_res_dir, angle, scale)    
+    intervened_train_length = MichalskiTrain([inst_cls(car_num, car_shape, intervened_length_val, car_wall, car_roof, wheels, car_l_shape, new_car_num_load)], new_dir, angle, scale)    
+    return [train, intervened_train_shape, intervened_train_roof, intervened_train_length]
+    
+
+
+def read_trains_and_intervene(file, toSimpleObjs=False, scale=(.5, .5, .5)):
+    lines = file
+    m_trains = []
+
+    if isinstance(file, str):
+        with open(file, "r") as a:
+            lines = a.readlines()
+    for line in lines:
+        m_cars = []
+        l = line.split(' ')
+        dir = l[0]
+        t_angle = l[1]
+        train_length = len(l) // 8
+        if scale is not None:
+            train_scale = scale
+        else:
+            #  scale the train to fit the scene (required space = number of cars + engine + free space)
+            train_scale = 3 / (train_length + 2) if train_length > 4 else 0.5
+        for c in range(train_length):
+            
+            ind = c * 8
+            # a = (l[ind+i] for i in range(8))
+            """ print("ATTRIBUTE START PER CAR")
+            print("----------------------------------------")
+            print("{}, {}, {}, {}, {}, {}, {}".format(l[ind + 2], l[ind + 3], l[ind + 4], l[ind + 5], l[ind + 6], l[ind + 7], l[ind + 8]))
+            print("----------------------------------------") """
+            car = BlenderCar(l[ind + 2], l[ind + 3], l[ind + 4], l[ind + 5], l[ind + 6], l[ind + 7], l[ind + 8],
+                             l[ind + 9].strip('\n'), train_scale)
+            if toSimpleObjs:
+                car = SimpleCar(l[ind + 2], l[ind + 3], l[ind + 4], l[ind + 5], l[ind + 6], l[ind + 7], l[ind + 8],
+                                l[ind + 9].strip('\n'), train_scale)
+            m_cars.append(car)
+        train = MichalskiTrain(m_cars, dir, t_angle, train_scale)
+        if toSimpleObjs is True:
+            train.update_pass_indices()
+        # t_angle = get_random_angle(with_occlusion, angle)
+        train = intervene_train(train)
+        m_trains.append(train)
+    return m_trains
+
 
 
 def get_random_angle(with_occlusion, angle=None):

@@ -64,6 +64,22 @@ def get_datasets(base_scene, raw_trains, train_vis, class_rule, min_car=2, max_c
     return full_ds
 
 
+def combine_json_intervened(path_settings, out_dir='output/image_generator', ds_size=10000, interventions = 0):
+    path_ori = f'output/tmp/image_generator/{path_settings}'
+    path_dest = f'{out_dir}/{path_settings}'
+    im_path = path_ori + '/images'
+    if os.path.isdir(im_path):
+        files = os.listdir(im_path)
+        if int(len(files) / (interventions + 1)) == ds_size:
+            merge_json_files_intervened(path_ori)
+            shutil.rmtree(path_ori + '/scenes')
+            try:
+                shutil.rmtree(path_dest)
+            except:
+                pass
+            shutil.move(path_ori, path_dest)
+
+
 def combine_json(path_settings, out_dir='output/image_generator', ds_size=10000):
     path_ori = f'output/tmp/image_generator/{path_settings}'
     path_dest = f'{out_dir}/{path_settings}'
@@ -78,6 +94,44 @@ def combine_json(path_settings, out_dir='output/image_generator', ds_size=10000)
             except:
                 pass
             shutil.move(path_ori, path_dest)
+
+
+def merge_json_files_intervened(path): 
+    """
+    merging all ground truth json files of the dataset
+    :param:  path (string)        : path to the dataset information
+    """
+    all_scenes = []
+    files = glob.glob(path + '/scenes/*_m_train_*.json')
+    #sort files by number 
+    import re
+    def custom_sort_key(s):
+        # Use regular expressions to extract NR1 and NR2 from the string
+        match = re.match(r'(\d+)_.*_(\d+)', s)  
+    
+        if match:
+            nr1, nr2 = map(int, match.groups())
+            return (nr1, nr2)
+        else:
+            return s
+        
+    files.sort(key = lambda x: custom_sort_key(x))
+    for p in files:
+        with open(p, 'r') as f:
+            all_scenes.append(json.load(f))
+    output = {
+        'info': {
+            'date': datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            'version': '0.1',
+            'license': None,
+        },
+        'scenes': all_scenes
+    }
+    json_pth = path + '/all_scenes/all_scenes.json'
+    os.makedirs(path + '/all_scenes/', exist_ok=True)
+    # args.output_scene_file.split('.json')[0]+'_classid_'+str(args.img_class_id)+'.json'
+    with open(json_pth, 'w+') as f:
+        json.dump(output, f, indent=2)
 
 
 def merge_json_files(path):

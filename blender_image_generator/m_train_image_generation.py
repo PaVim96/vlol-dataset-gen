@@ -8,10 +8,9 @@ from blender_image_generator.load_simple_assets import create_simple_scene, load
 from util import *
 import time
 
-
 def generate_image(class_rule, base_scene, raw_trains, train_vis, t_num, train, ds_name=None,
                    save_blender=False, replace_existing_img=True,
-                   high_res=False, gen_depth=False, min_cars=2, max_cars=4):
+                   high_res=False, gen_depth=False, min_cars=2, max_cars=4, train_name = ""):
     """ assemble a michalski train, render its corresponding image and generate ground truth information
     Args:
     :param:  base_scene (string)            : background scene of the train ('base_scene', 'desert_scene', 'sky_scene',
@@ -30,10 +29,10 @@ def generate_image(class_rule, base_scene, raw_trains, train_vis, t_num, train, 
 
     start = time.time()
     path_settings = f'{train_vis}_{class_rule}_{raw_trains}_{base_scene}_len_{min_cars}-{max_cars}' if ds_name is None else ds_name
-    output_image = f'output/tmp/image_generator/{path_settings}/images/{t_num}_m_train.png'
-    output_blendfile = f'output/tmp/image_generator/{path_settings}/blendfiles/{t_num}_m_train.blend'
-    output_scene = f'output/tmp/image_generator/{path_settings}/scenes/{t_num}_m_train.json'
-    output_depth_map = f'output/tmp/image_generator/{path_settings}/depths/{t_num}_m_train.png'
+    output_image = f'output/tmp/image_generator/{path_settings}/images/{t_num}_m_train{train_name}.png'
+    output_blendfile = f'output/tmp/image_generator/{path_settings}/blendfiles/{t_num}_m_train{train_name}.blend'
+    output_scene = f'output/tmp/image_generator/{path_settings}/scenes/{t_num}_m_train{train_name}.json'
+    output_depth_map = f'output/tmp/image_generator/{path_settings}/depths/{t_num}_m_train{train_name}.png'
     if os.path.isfile(output_image) and os.path.isfile(output_scene) and (os.path.isfile(
             output_depth_map) or not gen_depth) and not replace_existing_img:
         return

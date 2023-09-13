@@ -1,0 +1,7 @@
+{
+    "length": ["long", "short"],
+    "shape": ["rectangle", "bucket"],
+    "l_shape": ["rectangle", "triangle"],
+    "roof": ["none", "arc"],
+    "double": ["none"]
+}

@@ -13,21 +13,31 @@ RUN apt-get update && apt-get install -y git subversion cmake libx11-dev libxxf8
 RUN apt-get update && apt-get install -y gringo swi-prolog
 RUN apt-get upgrade -y
 
+
+RUN apt install libsqlite3-dev
+RUN apt install sqlite3 
+
 # install python and required packages
 RUN mkdir /home/python
 WORKDIR /home/python
 RUN wget https://www.python.org/ftp/python/3.10.2/Python-3.10.2.tgz
 RUN tar xzf Python-3.10.2.tgz
 WORKDIR /home/python/Python-3.10.2
+#RUN wget https://www.python.org/ftp/python/3.8.10/Python-3.8.10.tgz
+#RUN tar xzf Python-3.8.10.tgz 
+#WORKDIR /home/python/Python-3.8.10
 RUN ./configure --enable-optimizations
 RUN make install
 
 COPY modules/requirements.txt /home/python/requirements.txt
 RUN pip3 install --upgrade pip
+#this normally runs but does not work with 3.8.10
 RUN pip3 install -r /home/python/requirements.txt
 RUN pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
-RUN pip3 install ipdb
+
+
 RUN ln -s /usr/local/bin/python3.10 /usr/bin/python & ln -s /usr/local/bin/pip3.10 /usr/bin/pip
+#RUN ln -s /usr/local/bin/python3.8 /usr/bin/python & ln -s /usr/local/bin/pip3.8 /usr/bin/pip
 
 # set up blender as a python module
 RUN mkdir /home/blender-git
@@ -68,6 +78,7 @@ RUN rm ./CMakeLists.txt
 COPY modules/CMakeLists.txt ./CMakeLists.txt
 RUN make
 RUN cp -a /home/blender-git/build_linux/bin/. /usr/local/lib/python3.10/site-packages/
+#RUN cp -a /home/blender-git/build_linux/bin/. /usr/local/lib/python3.8/site-packages/
 
 EXPOSE 8282
 # create workdir

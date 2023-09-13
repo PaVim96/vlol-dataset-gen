@@ -5,8 +5,8 @@ from rtpt import RTPT
 
 from blender_image_generator.blender_util import get_scale
 from blender_image_generator.m_train_image_generation import generate_image
-from michalski_trains.dataset import combine_json
-from raw.gen_raw_trains import gen_raw_trains, read_trains
+from michalski_trains.dataset import combine_json, combine_json_intervened
+from raw.gen_raw_trains import gen_raw_trains, read_trains, read_trains_and_intervene
 from util import *
 import argparse
 
@@ -71,8 +71,8 @@ def main():
         # else relative to max number of cars in the dataset
         scale = get_scale(max_cars, auto_zoom)
         # load trains
-        trains = read_trains(ds_raw_path, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
-
+        #trains = read_trains(ds_raw_path, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
+        trains = read_trains_and_intervene(ds_raw_path, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
         # render trains
         trains = trains[start_ind:end_ind]
         rtpt = RTPT(name_initials='LH', experiment_name=f'gen_{base_scene[:3]}_{train_vis[0]}',
@@ -82,12 +82,28 @@ def main():
         t = torch.Tensor([0]).to(device)
         ds_name = tag + f'{train_vis}_{rule}_{distribution}_{base_scene}_len_{min_cars}-{max_cars}'
 
+        intervened = distribution_config is not None
         for t_num, train in enumerate(trains, start=start_ind):
             rtpt.step()
-            generate_image(rule, base_scene, distribution, train_vis, t_num, train, save_blender=save_blender,
-                           replace_existing_img=replace_existing_img, ds_name=ds_name, high_res=high_res,
-                           gen_depth=gen_depth, min_cars=min_cars, max_cars=max_cars)
-        combine_json(ds_name, out_dir=out_path, ds_size=ds_size)
+            if intervened:
+                intervened_names = ["normal", "int_color", "int_shape", "int_length"]
+                assert len(intervened_names) == len(train)
+                i = 0
+                for int_name, curr_train in zip(intervened_names, train):
+                    curr_name = "_{}_{}".format(str(i), int_name)
+                    generate_image(rule, base_scene, distribution, train_vis, t_num, curr_train, save_blender=save_blender,
+                                replace_existing_img=replace_existing_img, ds_name=ds_name, high_res=high_res,
+                                gen_depth=gen_depth, min_cars=min_cars, max_cars=max_cars, train_name=curr_name)
+                    i += 1
+                i = 0
+            else: 
+                generate_image(rule, base_scene, distribution, train_vis, t_num, train, save_blender=save_blender,
+                                replace_existing_img=replace_existing_img, ds_name=ds_name, high_res=high_res,
+                                gen_depth=gen_depth, min_cars=min_cars, max_cars=max_cars)
+        if intervened:
+            combine_json_intervened(ds_name, out_dir=out_path, ds_size=ds_size, interventions = 3)
+        else: 
+            combine_json(ds_name, out_dir=out_path, ds_size=ds_size)
 
     if args.command == 'ct':
         from raw.concept_tester import eval_rule
