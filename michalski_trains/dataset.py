@@ -78,6 +78,8 @@ def combine_json_intervened(path_settings, out_dir='output/image_generator', ds_
             except:
                 pass
             shutil.move(path_ori, path_dest)
+        else: 
+            raise ValueError("SOMETHING WRONG FOO")
 
 
 def combine_json(path_settings, out_dir='output/image_generator', ds_size=10000):

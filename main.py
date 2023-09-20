@@ -72,7 +72,9 @@ def main():
         scale = get_scale(max_cars, auto_zoom)
         # load trains
         #trains = read_trains(ds_raw_path, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
-        trains = read_trains_and_intervene(ds_raw_path, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
+        intervene_names = ["shape", "length", "double", "roof", "wheels", "l_shape", "l_num"]
+        num_intervens = len(intervene_names)
+        trains = read_trains_and_intervene(ds_raw_path, intervene_names, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
         # render trains
         trains = trains[start_ind:end_ind]
         rtpt = RTPT(name_initials='LH', experiment_name=f'gen_{base_scene[:3]}_{train_vis[0]}',
@@ -86,7 +88,7 @@ def main():
         for t_num, train in enumerate(trains, start=start_ind):
             rtpt.step()
             if intervened:
-                intervened_names = ["normal", "int_color", "int_shape", "int_length"]
+                intervened_names = ["normal"] + intervene_names
                 assert len(intervened_names) == len(train)
                 i = 0
                 for int_name, curr_train in zip(intervened_names, train):
@@ -101,7 +103,7 @@ def main():
                                 replace_existing_img=replace_existing_img, ds_name=ds_name, high_res=high_res,
                                 gen_depth=gen_depth, min_cars=min_cars, max_cars=max_cars)
         if intervened:
-            combine_json_intervened(ds_name, out_dir=out_path, ds_size=ds_size, interventions = 3)
+            combine_json_intervened(ds_name, out_dir=out_path, ds_size=ds_size, interventions = num_intervens)
         else: 
             combine_json(ds_name, out_dir=out_path, ds_size=ds_size)
 

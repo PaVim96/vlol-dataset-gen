@@ -3,27 +3,7 @@ import os
 import random
 from pyswip import Prolog
 from michalski_trains.m_train import BlenderCar, MichalskiTrain, SimpleCar
-
-
-
-class InterveneDict(dict):
-        def __setitem__(self, key, value):
-            # Remove any previous connections with these values
-            if key in self:
-                del self[key]
-            if value in self:
-                del self[value]
-            dict.__setitem__(self, key, value)
-            dict.__setitem__(self, value, key)
-
-        def __delitem__(self, key):
-            dict.__delitem__(self, self[key])
-            dict.__delitem__(self, key)
-
-        def __len__(self):
-            """Returns the number of connections"""
-            return dict.__len__(self) // 2
-
+from copy import deepcopy
 
 def gen_raw_michalski_trains(class_rule, out_path, num_entries=10000, with_occlusion=False, min_cars=2, max_cars=4):
     """ Generate Michalski trains descriptions using the Prolog train generator
@@ -151,11 +131,15 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
                 length = random.choice(distribution_settings["length"])
 
                 if length == 'long':
-                    wheels = random.choice(['2', '3'])
-                    l_num = random.randint(0, 3)
+                    #NOTE: P.V change
+                    wheels = "3"
+                    l_num = 2
+                    #wheels = random.choice(['2', '3'])
+                    #l_num = random.randint(0, 3)
                 else:
                     wheels = '2'
-                    l_num = random.randint(0, 2)
+                    #l_num = random.randint(0, 2)
+                    l_num = 1
 
                 shape = random.choice(distribution_settings["shape"])
                 double = random.choice(distribution_settings["double"])
@@ -255,7 +239,74 @@ def read_trains(file, toSimpleObjs=False, scale=(.5, .5, .5)):
     return m_trains
 
 
-def intervene_train(train):
+def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
+
+        intervene_dict = {
+            "length": ["short", "long"], 
+            "l_num": [1, 2], 
+            "shape": ["rectangle", "bucket"], 
+            "double": ["double", "not_double"], 
+            "l_shape": ["rectangle", "triangle"], 
+            "roof": ["arc", "none"], 
+            "wheels": [2, 3]
+        }
+        
+        new_values = deepcopy(variable_dict)
+
+
+        
+        variable_value = variable_dict[to_intervene_variable]
+        corresponding_list = intervene_dict[to_intervene_variable]
+
+        assert variable_value in corresponding_list
+        corresponding_list.remove(variable_value)
+
+        intervened_val = corresponding_list[0]
+        try: 
+            intervened_val = int(intervened_val)
+        except: 
+            pass 
+        new_values[to_intervene_variable] = intervened_val
+
+        new_dir = dir
+        if to_intervene_variable == "length" or to_intervene_variable == "roof":
+            new_dir = "east" if (new_values["length"] == "long" and new_values["roof"] == "arc") else "west"
+            if to_intervene_variable == "length": 
+
+                num_load_val = variable_dict["l_num"]
+                num_wheels_val = variable_dict["wheels"]
+
+
+                #get intervened num_load
+                intervened_numload_val = intervene_dict["l_num"]
+                intervened_numload_val.remove(num_load_val)
+                intervened_numload_val = intervened_numload_val[0]
+                new_values["l_num"] = intervened_numload_val
+
+
+                #same for wheel val
+                intervened_numwheels_val = intervene_dict["wheels"]
+                intervened_numwheels_val.remove(num_wheels_val)
+                intervened_numwheels_val = intervened_numwheels_val[0]
+                new_values["wheels"] = intervened_numwheels_val
+            
+
+
+        ordered_list_names = ["shape", "length", "double", "roof", "wheels", "l_shape", "l_num"]
+        old_vals = []
+        order_list_vals = []
+        for var_name in ordered_list_names:
+            old_vals.append(variable_dict[var_name])
+            order_list_vals.append(new_values[var_name])
+
+        print("---------------------------------")
+        print("Old vals: {}, dir: {}".format(old_vals, dir))
+        print("New vals: {}, dir: {}".format(order_list_vals, new_dir))
+        print("---------------------------------")
+        return order_list_vals, new_dir
+
+
+def intervene_train(train, intervene_names):
     assert len(train.get_cars()) == 1, "more than one car in data"
     car = train.get_cars()[0]
 
@@ -268,30 +319,7 @@ def intervene_train(train):
     #length: short => long (sample car_load_num and update direction); long => short (same)
 
     #return train = [normal_train, intervened_shape, intervened_roof, intervened_length]
-    intervener = InterveneDict()
-    intervener["rectangle"] = "bucket"
-    intervener["short"] = "long"
-    intervener["arc"] = "none"
-
-    def intervened_length(intervened_length, roof):
-        new_dir = None
-        new_car_num_load = None
-        wheels = None
-        if intervened_length == "short": 
-            new_car_num_load = random.randint(0,3)
-            wheels = "2"
-            new_dir = "west"
-        else: 
-            new_car_num_load = random.randint(0,2)
-            wheels = random.choice(["2", "3"])
-            if roof == "rectangle":
-                new_dir = "east"
-            else: 
-                new_dir = "west"
-        return new_car_num_load, wheels, new_dir
     
-
-
     dir = train.get_label()
     angle = train.get_angle()
     scale = train.get_blender_scale()
@@ -305,28 +333,30 @@ def intervene_train(train):
     car_load_num = car.get_load_number()
     car_l_shape = car.get_load_shape()
 
+    variable_names = ["shape", "length", "double", "roof", "wheels", "l_shape", "l_num"]
+    variable_values = [car_shape, car_length, car_wall, car_roof, car_wheels, car_l_shape, car_load_num]
+    variable_dict = {}
+    for i in range(len(variable_values)): 
+        variable_dict[variable_names[i]] = variable_values[i]
+
+
+
+    all_trains = [train]
+    for attr_name in intervene_names:
+        curr_attribute_list, curr_dir = interevene_function(attr_name, variable_dict, dir)
+        curr_attribute_list = [car_num] + curr_attribute_list
+        all_trains.append(MichalskiTrain([inst_cls(*curr_attribute_list)], curr_dir, angle, scale))
+
     
 
-    #dummy list because train expects a list
-    intervened_length_val = intervener[car_length]
-    new_car_num_load, wheels, new_dir = intervened_length(intervened_length_val, car_roof)
-
-    #shape is not really shape but rather color
-
-    intervened_shape_val = intervener[car_roof]
-    if intervened_shape_val == "arc" and car_length == "long":
-        intervened_shape_res_dir = "east"
-    else: 
-        intervened_shape_res_dir = "west"
-
-    intervened_train_shape = MichalskiTrain([inst_cls(car_num, intervener[car_shape], car_length, car_wall, car_roof, car_wheels, car_l_shape, car_load_num)], dir, angle, scale)    
+    """ intervened_train_shape = MichalskiTrain([inst_cls(car_num, intervener[car_shape], car_length, car_wall, car_roof, car_wheels, car_l_shape, car_load_num)], dir, angle, scale)    
     intervened_train_roof = MichalskiTrain([inst_cls(car_num, car_shape, car_length, car_wall, intervener[car_roof], car_wheels, car_l_shape, car_load_num)], intervened_shape_res_dir, angle, scale)    
-    intervened_train_length = MichalskiTrain([inst_cls(car_num, car_shape, intervened_length_val, car_wall, car_roof, wheels, car_l_shape, new_car_num_load)], new_dir, angle, scale)    
-    return [train, intervened_train_shape, intervened_train_roof, intervened_train_length]
+    intervened_train_length = MichalskiTrain([inst_cls(car_num, car_shape, intervened_length_val, car_wall, car_roof, wheels, car_l_shape, new_car_num_load)], new_dir, angle, scale)     """
+    return all_trains 
     
 
 
-def read_trains_and_intervene(file, toSimpleObjs=False, scale=(.5, .5, .5)):
+def read_trains_and_intervene(file, intervene_names, toSimpleObjs=False, scale=(.5, .5, .5)):
     lines = file
     m_trains = []
 
@@ -362,7 +392,7 @@ def read_trains_and_intervene(file, toSimpleObjs=False, scale=(.5, .5, .5)):
         if toSimpleObjs is True:
             train.update_pass_indices()
         # t_angle = get_random_angle(with_occlusion, angle)
-        train = intervene_train(train)
+        train = intervene_train(train, intervene_names)
         m_trains.append(train)
     return m_trains
 
