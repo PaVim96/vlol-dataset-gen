@@ -70,6 +70,7 @@ def combine_json_intervened(path_settings, out_dir='output/image_generator', ds_
     im_path = path_ori + '/images'
     if os.path.isdir(im_path):
         files = os.listdir(im_path)
+        ds_size = 9091
         if int(len(files) / (interventions + 1)) == ds_size:
             merge_json_files_intervened(path_ori)
             shutil.rmtree(path_ori + '/scenes')
@@ -78,8 +79,8 @@ def combine_json_intervened(path_settings, out_dir='output/image_generator', ds_
             except:
                 pass
             shutil.move(path_ori, path_dest)
-        else: 
-            raise ValueError("SOMETHING WRONG FOO")
+        
+
 
 
 def combine_json(path_settings, out_dir='output/image_generator', ds_size=10000):
@@ -129,11 +130,13 @@ def merge_json_files_intervened(path):
         },
         'scenes': all_scenes
     }
+    import ipdb; ipdb.set_trace()
     json_pth = path + '/all_scenes/all_scenes.json'
     os.makedirs(path + '/all_scenes/', exist_ok=True)
     # args.output_scene_file.split('.json')[0]+'_classid_'+str(args.img_class_id)+'.json'
     with open(json_pth, 'w+') as f:
         json.dump(output, f, indent=2)
+        print("DONE")
 
 
 def merge_json_files(path):

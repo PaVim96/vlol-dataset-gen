@@ -62,7 +62,7 @@ def generate_image(class_rule, base_scene, raw_trains, train_vis, t_num, train, 
     if high_res:
         render_args.resolution_percentage = 100
     else:
-        render_args.resolution_percentage = 25
+        render_args.resolution_percentage = 15
     # bpy.data.worlds['World'].cycles.sample_as_light = True
     rn_scene.cycles.blur_glossy = 2.0
     rn_scene.cycles.max_bounces = 20

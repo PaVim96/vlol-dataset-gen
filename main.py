@@ -41,6 +41,13 @@ def main():
     start_ind = args.index_start
     end_ind = args.index_end if args.index_end is not None else ds_size
 
+    if False:
+        num_intervens = 7
+        ds_name = tag + f'{train_vis}_{rule}_{distribution}_{base_scene}_len_{min_cars}-{max_cars}'
+
+        combine_json_intervened(ds_name, out_dir=out_path, ds_size=ds_size, interventions = num_intervens)
+        return
+
     if args.command == 'image_generator':
         # generate images in range [start_ind:end_ind]
         ds_raw_path = f'{out_path}/dataset_descriptions/{rule}/{tag}{distribution}_len_{min_cars}-{max_cars}.txt'
@@ -121,6 +128,7 @@ def parse():
                         help='path to the output directory')
     parser.add_argument('--tag', type=str, default="", help='add name tag to the output directory')
     parser.add_argument('--cuda', type=int, default=0, help='Which cuda device to use')
+
 
     # Background knowledge settings
     parser.add_argument('--distribution', type=str, default='MichalskiTrains',
