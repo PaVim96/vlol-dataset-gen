@@ -1,7 +1,7 @@
 {
     "length": ["long", "short"],
-    "shape": ["rectangle", "bucket"],
-    "l_shape": ["rectangle", "triangle"],
-    "roof": ["none", "arc"],
+    "shape": ["rectangle", "bucket", "ellipse"], 
+    "l_shape": ["rectangle", "triangle", "circle", "diamond"],
+    "roof": ["none", "peaked"],
     "double": ["not_double", "double"]
 }

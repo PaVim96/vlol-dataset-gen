@@ -79,7 +79,7 @@ def main():
         scale = get_scale(max_cars, auto_zoom)
         # load trains
         #trains = read_trains(ds_raw_path, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
-        intervene_names = ["shape", "length", "double", "roof", "wheels", "l_shape", "l_num"]
+        intervene_names = ["shape", "length", "l_shape", "l_num"]
         num_intervens = len(intervene_names)
         trains = read_trains_and_intervene(ds_raw_path, intervene_names, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
         # render trains
@@ -92,8 +92,11 @@ def main():
         ds_name = tag + f'{train_vis}_{rule}_{distribution}_{base_scene}_len_{min_cars}-{max_cars}'
 
         intervened = distribution_config is not None
+        scene_names = ["base_scene", "desert_scene","sky_scene"]
         for t_num, train in enumerate(trains, start=start_ind):
             rtpt.step()
+            base_scene_idx = random.randint(0, len(scene_names) - 1)
+            base_scene = scene_names[base_scene_idx]
             if intervened:
                 intervened_names = ["normal"] + intervene_names
                 assert len(intervened_names) == len(train)

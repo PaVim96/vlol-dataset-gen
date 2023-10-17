@@ -133,13 +133,13 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
                 if length == 'long':
                     #NOTE: P.V change
                     wheels = "3"
-                    l_num = 2
+                    #l_num = 2
                     #wheels = random.choice(['2', '3'])
-                    #l_num = random.randint(0, 3)
+                    l_num = random.randint(2, 3)
                 else:
                     wheels = '2'
-                    #l_num = random.randint(0, 2)
-                    l_num = 1
+                    l_num = random.randint(0, 1)
+                    #l_num = 1
 
                 shape = random.choice(distribution_settings["shape"])
                 double = random.choice(distribution_settings["double"])
@@ -243,11 +243,11 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
 
         intervene_dict = {
             "length": ["short", "long"], 
-            "l_num": [1, 2], 
-            "shape": ["rectangle", "bucket"], 
+            "l_num": [[0,1],[2,3]], 
+            "shape": ["rectangle", "bucket", "ellipse"], 
             "double": ["double", "not_double"], 
-            "l_shape": ["rectangle", "triangle"], 
-            "roof": ["arc", "none"], 
+            "l_shape": ["rectangle", "triangle", "circle", "diamond"], 
+            "roof": ["peaked", "none"], 
             "wheels": [2, 3]
         }
         
@@ -255,13 +255,30 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
 
 
         
+        #the current variable value of the intervened variable name
         variable_value = variable_dict[to_intervene_variable]
+        #the list of possible values which can be intervened on
         corresponding_list = intervene_dict[to_intervene_variable]
 
-        assert variable_value in corresponding_list
+        #if we intervene on load number get the right list
+        if to_intervene_variable == "l_num": 
+            original_length_val = variable_dict["length"]
+            needed_idx = intervene_dict["length"].index(original_length_val)
+            corresponding_list = corresponding_list[needed_idx]
+
+        try:
+            assert variable_value in corresponding_list
+        except: 
+            print(variable_dict)
+            import ipdb; ipdb.set_trace()
         corresponding_list.remove(variable_value)
 
-        intervened_val = corresponding_list[0]
+        #get a random new value for the intervened variable in the list of possible values
+        rand_idx = random.randint(0, len(corresponding_list)-1)
+
+
+        #the variable value after it was intervened on
+        intervened_val = corresponding_list[rand_idx]
         try: 
             intervened_val = int(intervened_val)
         except: 
@@ -269,8 +286,10 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
         new_values[to_intervene_variable] = intervened_val
 
         new_dir = dir
+
+
         if to_intervene_variable == "length" or to_intervene_variable == "roof":
-            new_dir = "east" if (new_values["length"] == "long" and new_values["roof"] == "arc") else "west"
+            new_dir = "east" if (new_values["length"] == "long" and new_values["roof"] == "peaked") else "west"
             if to_intervene_variable == "length": 
 
                 num_load_val = variable_dict["l_num"]
@@ -278,9 +297,15 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
 
 
                 #get intervened num_load
-                intervened_numload_val = intervene_dict["l_num"]
-                intervened_numload_val.remove(num_load_val)
-                intervened_numload_val = intervened_numload_val[0]
+                if intervened_val == "short": 
+                    idx = 0
+                elif intervened_val == "long": 
+                    idx = 1
+                else: 
+                    raise ValueError("Something very weird happened maayn")
+                intervened_numload_val = intervene_dict["l_num"][idx]
+                rand_idx_numload = random.randint(0, len(intervened_numload_val)-1)
+                intervened_numload_val = intervened_numload_val[rand_idx_numload]
                 new_values["l_num"] = intervened_numload_val
 
 
@@ -299,10 +324,10 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
             old_vals.append(variable_dict[var_name])
             order_list_vals.append(new_values[var_name])
 
-        print("---------------------------------")
+        """ print("---------------------------------")
         print("Old vals: {}, dir: {}".format(old_vals, dir))
         print("New vals: {}, dir: {}".format(order_list_vals, new_dir))
-        print("---------------------------------")
+        print("---------------------------------") """
         return order_list_vals, new_dir
 
 

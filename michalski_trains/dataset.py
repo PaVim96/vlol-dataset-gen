@@ -130,7 +130,6 @@ def merge_json_files_intervened(path):
         },
         'scenes': all_scenes
     }
-    import ipdb; ipdb.set_trace()
     json_pth = path + '/all_scenes/all_scenes.json'
     os.makedirs(path + '/all_scenes/', exist_ok=True)
     # args.output_scene_file.split('.json')[0]+'_classid_'+str(args.img_class_id)+'.json'

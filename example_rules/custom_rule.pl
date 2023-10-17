@@ -5,4 +5,4 @@
 
 #eastbound(Train):- has_car(Train,Car), load_num(Car,N), car_num(Car,N), has_wheel0(Car,N).
 #eastbound(Train):- has_car(Train, Car), rectangle(Car), long(Car).
-eastbound(Train):- has_car(Train, Car), long(Car), roof_foundation(Car).
+eastbound(Train):- has_car(Train, Car), long(Car), peaked_roof(Car).
