@@ -117,6 +117,8 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
     except OSError:
         pass
     os.makedirs(out_path.rsplit('/', 1)[0], exist_ok=True)
+    shape_long = ["none", "peaked"]
+    shape_short = ["arc", "flat"]
     with open(out_path, 'w+') as text_file:
         while west_counter < int(math.ceil(num_entries / 2)) or east_counter < int(num_entries / 2):
             t_angle = get_random_angle(with_occlusion)
@@ -124,6 +126,7 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
             m_cars = f''
 
             num_cars = random.randint(min_cars, max_cars)
+            
             for j in range(num_cars):
                 train += ', ' if len(train) > 0 else ''
 
@@ -133,13 +136,13 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
                 if length == 'long':
                     #NOTE: P.V change
                     wheels = "3"
-                    #l_num = 2
+                    l_num = 2
                     #wheels = random.choice(['2', '3'])
                     l_num = random.randint(2, 3)
                 else:
                     wheels = '2'
-                    l_num = random.randint(0, 1)
-                    #l_num = 1
+                    #l_num = random.randint(0, 1)
+                    l_num = 1
 
                 shape = random.choice(distribution_settings["shape"])
                 double = random.choice(distribution_settings["double"])
@@ -363,8 +366,6 @@ def intervene_train(train, intervene_names):
     variable_dict = {}
     for i in range(len(variable_values)): 
         variable_dict[variable_names[i]] = variable_values[i]
-
-
 
     all_trains = [train]
     for attr_name in intervene_names:

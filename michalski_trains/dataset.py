@@ -70,7 +70,6 @@ def combine_json_intervened(path_settings, out_dir='output/image_generator', ds_
     im_path = path_ori + '/images'
     if os.path.isdir(im_path):
         files = os.listdir(im_path)
-        ds_size = 9091
         if int(len(files) / (interventions + 1)) == ds_size:
             merge_json_files_intervened(path_ori)
             shutil.rmtree(path_ori + '/scenes')
