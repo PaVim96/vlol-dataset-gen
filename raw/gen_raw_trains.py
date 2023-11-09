@@ -84,7 +84,7 @@ def parse_config(distribution_config):
 
 
 
-def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusion=False, min_cars=2, max_cars=4, distribution_config = None):
+def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusion=False, min_cars=2, max_cars=4, distribution_config = None, rel_cars_path = None):
     """ Generate random trains descriptions
     Args:
         out_path: string path to save the generated train descriptions
@@ -94,8 +94,8 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
         max_cars: int maximum number of cars in a train
         min_cars: int minimum number of cars in a train
     """
-    distribution_settings = parse_config(distribution_config) 
-    print("Distribution settings are: {}".format(distribution_settings))
+    attribute_settings = parse_config(distribution_config) 
+    print("Distribution settings are: {}".format(attribute_settings))
     classifier = 'output/tmp/raw/concept_tester_tmp.pl'
     os.makedirs('output/tmp/raw/', exist_ok=True)
     rule_path = f'example_rules/{class_rule}_rule.pl'
@@ -112,42 +112,90 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
     prolog.consult(classifier)
     west_counter = 0
     east_counter = 0
+    none_counter = 0
     try:
         os.remove(out_path)
     except OSError:
         pass
     os.makedirs(out_path.rsplit('/', 1)[0], exist_ok=True)
-    shape_long = ["none", "peaked"]
-    shape_short = ["arc", "flat"]
+
+
+    #west and east attributes
+    east_attrs = {
+        "roof" : ["none", "peaked", "jagged"],
+        "length": "long",
+        "l_num": 2, 
+        "wheels": "3"
+
+    }
+
+    west_attrs = {
+        "roof" : ["flat", "arc"],
+        "length": "short",
+        "l_num": 1, 
+        "wheels": "2"
+    }
+
+    dir_attrs = [east_attrs, west_attrs]
+
+    def is_ok_func(dir_attrs, length:str, roof:str, l_num: int): 
+        assert isinstance(l_num, int)
+        length_ok = length != dir_attrs["length"]
+        roof_ok = True
+        for roof_val in dir_attrs["roof"]: 
+            if roof == roof_val: 
+                roof_ok = False
+                break
+        lnum_ok = l_num != dir_attrs["l_num"]  
+        return length_ok or roof_ok or lnum_ok
+
+    #to know which ones i need to care about inverening
+    relevant_cars = []
     with open(out_path, 'w+') as text_file:
-        while west_counter < int(math.ceil(num_entries / 2)) or east_counter < int(num_entries / 2):
+        while west_counter < int(math.floor(num_entries / 3)) or east_counter < int(math.floor(num_entries / 3)) or none_counter < int(math.floor(num_entries / 3)):
             t_angle = get_random_angle(with_occlusion)
             train = ''
             m_cars = f''
 
             num_cars = random.randint(min_cars, max_cars)
-            
+            assert num_cars == 3, "bruh something wrong"
+
+            #NOTE: added for patricks data
+            #dir in [east,west,none]
+            random_dir_idx = random.randint(0, 2)
+            car_num_label_idx = 1
             for j in range(num_cars):
                 train += ', ' if len(train) > 0 else ''
 
                 n = j + 1
-                length = random.choice(distribution_settings["length"])
-
-                if length == 'long':
-                    #NOTE: P.V change
-                    wheels = "3"
-                    l_num = 2
-                    #wheels = random.choice(['2', '3'])
-                    l_num = random.randint(2, 3)
+                #only force attributes if we have west or east train
+                if j == car_num_label_idx and random_dir_idx != 2:
+                    needed_attrs = dir_attrs[random_dir_idx]
+                    length = needed_attrs["length"]
+                    roof = needed_attrs["roof"][random.randint(0, len(needed_attrs["roof"]))-1]
+                    l_num = needed_attrs["l_num"]
+                    wheels = needed_attrs["wheels"]
+                #"none" direction
                 else:
-                    wheels = '2'
-                    #l_num = random.randint(0, 1)
-                    l_num = 1
+                    is_ok = False
+                    while not is_ok:
+                        length = random.choice(attribute_settings["length"])
+                        roof = random.choice(attribute_settings["roof"])
+                        if length == 'long':
+                            #NOTE: P.V change
+                            wheels = "3"
+                            #l_num = 2
+                            #wheels = random.choice(['2', '3'])
+                            l_num = random.randint(2, 3)
+                        else:
+                            wheels = '2'
+                            l_num = random.randint(0, 1)
+                            #l_num = 1
+                        is_ok = is_ok_func(east_attrs, length, roof, l_num) and is_ok_func(west_attrs, length, roof, l_num)
 
-                shape = random.choice(distribution_settings["shape"])
-                double = random.choice(distribution_settings["double"])
-                roof = random.choice(distribution_settings["roof"])
-                l_shape = random.choice(distribution_settings["l_shape"])
+                shape = random.choice(attribute_settings["shape"])
+                double = random.choice(attribute_settings["double"])
+                l_shape = random.choice(attribute_settings["l_shape"])
                 car = str(
                     n) + ' ' + shape + ' ' + length + ' ' + double + ' ' + roof + ' ' + wheels + ' ' + l_shape + ' ' + str(
                     l_num)
@@ -158,22 +206,52 @@ def gen_raw_random_trains(class_rule, out_path, num_entries=10000, with_occlusio
                 m_cars = m_cars + car
                 # m_cars.append(michalski.MichalskiCar(n, shape, length, double, roof, wheels, l_num, l_shape))
             # m_trains.append(michalski.MichalskiTrain(m_cars, None))
-            q = list(prolog.query(f"eastbound([{train}])."))
+
+            #NOTE: i change this such that we have 3 classes, this is a very hacky way tho
+            if random_dir_idx == 0 and east_counter < int(num_entries / 3): 
+                m_cars = f'{"east"} {t_angle} ' + m_cars
+                text_file.write(m_cars + '\n')
+                east_counter += 1
+            elif random_dir_idx == 1 and west_counter < int(num_entries / 3): 
+                m_cars = f'{"west"} {t_angle} ' + m_cars
+                text_file.write(m_cars + '\n')
+                west_counter += 1
+            elif random_dir_idx == 2 and none_counter < int(num_entries / 3):                 
+                m_cars = f'{"none"} {t_angle} ' + m_cars
+                text_file.write(m_cars + '\n')
+                none_counter += 1
+
+            relevant_cars.append(1)
+            """ q = list(prolog.query(f"eastbound([{train}])."))
             p = 'west' if len(q) == 0 else 'east'
             if p == 'east' and east_counter < int(num_entries / 2):
+                relevant_cars.append(car_num_label_idx)
                 m_cars = f'{p} {t_angle} ' + m_cars
                 text_file.write(m_cars + '\n')
                 east_counter += 1
             if p == 'west' and west_counter < int(math.ceil(num_entries / 2)):
+                relevant_cars.append(car_num_label_idx)
                 m_cars = f'{p} {t_angle} ' + m_cars
                 text_file.write(m_cars + '\n')
-                west_counter += 1
-    print(f'generated {west_counter} westbound trains and {east_counter} eastbound trains')
+                west_counter += 1 """
+    print(f'generated {west_counter} westbound trains and {east_counter} eastbound trains and {none_counter} none trains')
     os.remove(classifier)
+
+    #only write if we really have more than single cars
+    if len(relevant_cars) > 0:
+        try: 
+            with open(rel_cars_path, "w") as write_file: 
+                for idx in relevant_cars: 
+                    write_file.write(str(idx) + '\n')
+                print("Succesfully written relevant cars")
+        except: 
+            if len(relevant_cars) > 0: 
+                raise ValueError("something wrong foo")
+
 
 
 def gen_raw_trains(raw_trains, classification_rule, out_path, num_entries=10000, replace_existing=True,
-                   with_occlusion=False, min_cars=2, max_cars=4, distribution_config = None):
+                   with_occlusion=False, min_cars=2, max_cars=4, distribution_config = None, rel_cars_path = None):
     """ Generate random or Michalski train descriptions
     Args:
         raw_trains: string type of train which is generated available options: 'RandomTrains' and 'MichalskiTrains'
@@ -189,7 +267,7 @@ def gen_raw_trains(raw_trains, classification_rule, out_path, num_entries=10000,
         raise ValueError(f'min_train_length {min_cars} is larger than max_train_length {max_cars}')
     if replace_existing:
         if raw_trains == 'RandomTrains':
-            gen_raw_random_trains(classification_rule, out_path, num_entries, with_occlusion, min_cars, max_cars, distribution_config = distribution_config)
+            gen_raw_random_trains(classification_rule, out_path, num_entries, with_occlusion, min_cars, max_cars, distribution_config = distribution_config, rel_cars_path=rel_cars_path)
         elif raw_trains == 'MichalskiTrains':
             gen_raw_michalski_trains(classification_rule, out_path, num_entries, with_occlusion, min_cars, max_cars)
 
@@ -246,11 +324,11 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
 
         intervene_dict = {
             "length": ["short", "long"], 
-            "l_num": [[0,1],[2,3]], 
+            "l_num": [0,1,2,3], 
             "shape": ["rectangle", "bucket", "ellipse"], 
             "double": ["double", "not_double"], 
             "l_shape": ["rectangle", "triangle", "circle", "diamond"], 
-            "roof": ["peaked", "none"], 
+            "roof": ["none", "peaked", "jagged", "flat", "arc"], 
             "wheels": [2, 3]
         }
         
@@ -263,17 +341,13 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
         #the list of possible values which can be intervened on
         corresponding_list = intervene_dict[to_intervene_variable]
 
-        #if we intervene on load number get the right list
-        if to_intervene_variable == "l_num": 
-            original_length_val = variable_dict["length"]
-            needed_idx = intervene_dict["length"].index(original_length_val)
-            corresponding_list = corresponding_list[needed_idx]
 
         try:
             assert variable_value in corresponding_list
         except: 
             print(variable_dict)
             import ipdb; ipdb.set_trace()
+        #interventions only on the non current value
         corresponding_list.remove(variable_value)
 
         #get a random new value for the intervened variable in the list of possible values
@@ -290,35 +364,25 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
 
         new_dir = dir
 
-
-        if to_intervene_variable == "length" or to_intervene_variable == "roof":
-            new_dir = "east" if (new_values["length"] == "long" and new_values["roof"] == "peaked") else "west"
+        #if we intervene on those we need to change dir and maybe coupled variables
+        if to_intervene_variable == "length" or to_intervene_variable == "roof" or to_intervene_variable == "l_num":
             if to_intervene_variable == "length": 
-
-                num_load_val = variable_dict["l_num"]
-                num_wheels_val = variable_dict["wheels"]
-
-
-                #get intervened num_load
-                if intervened_val == "short": 
-                    idx = 0
-                elif intervened_val == "long": 
-                    idx = 1
-                else: 
-                    raise ValueError("Something very weird happened maayn")
-                intervened_numload_val = intervene_dict["l_num"][idx]
-                rand_idx_numload = random.randint(0, len(intervened_numload_val)-1)
-                intervened_numload_val = intervened_numload_val[rand_idx_numload]
+                if intervened_val == "long": 
+                    intervened_numload_val = random.randint(2,3)
+                    intervened_num_wheels = "2"
+                elif intervened_val == "short": 
+                    intervened_numload_val = random.randint(0,1)
+                    intervened_num_wheels = "2"
                 new_values["l_num"] = intervened_numload_val
-
-
-                #same for wheel val
-                intervened_numwheels_val = intervene_dict["wheels"]
-                intervened_numwheels_val.remove(num_wheels_val)
-                intervened_numwheels_val = intervened_numwheels_val[0]
-                new_values["wheels"] = intervened_numwheels_val
-            
-
+                new_values["wheels"] = intervened_num_wheels
+            #update direction
+            is_east =  new_values["length"] == "long" and new_values["roof"] in ["none", "peaked", "jagged"] and new_values["l_num"] == 2
+            is_west =  new_values["length"] == "short" and new_values["roof"] in ["arc", "flat"] and new_values["l_num"] == 1
+            new_dir = "none"
+            if is_east: 
+                new_dir = "east"
+            elif is_west: 
+                new_dir = "west"
 
         ordered_list_names = ["shape", "length", "double", "roof", "wheels", "l_shape", "l_num"]
         old_vals = []
@@ -334,44 +398,51 @@ def interevene_function(to_intervene_variable:str, variable_dict:dict, dir:str):
         return order_list_vals, new_dir
 
 
-def intervene_train(train, intervene_names):
-    assert len(train.get_cars()) == 1, "more than one car in data"
-    car = train.get_cars()[0]
+def intervene_train(train, intervene_names, rel_car_idx):
+    """Intervenes a single train object using the variables stated in intervened names, only accessing the car at rel_car_idx
+    Returns a list of 1+len(intervene_names) train objects, where each train object is either the normal train (at 0) or an intervened train
+    """
+    all_trains = [train]
+    car_list = train.get_cars()
+    #we know this is 1 because we said so 
+    #relevant_car = car_list[rel_car_idx]
+    assert len(car_list) == 3, "some train without 3 cars"
+    relevant_car = car_list[1]
+    inst_cls = type(relevant_car)
 
-    inst_cls = type(car)
-    #interventions are: 
 
-    #car_shape: rectangle => bucket
-    #roof: arc => none
-    #direction = west = (length == long) && (shape == rectangle)
-    #length: short => long (sample car_load_num and update direction); long => short (same)
+    variable_names = ["shape", "length", "double", "roof", "wheels", "l_shape", "l_num"]
 
-    #return train = [normal_train, intervened_shape, intervened_roof, intervened_length]
-    
+
     dir = train.get_label()
     angle = train.get_angle()
     scale = train.get_blender_scale()
 
-    car_num = car.get_car_number()
-    car_shape = car.get_car_shape()
-    car_length = car.get_car_length()
-    car_roof = car.get_car_roof()
-    car_wall = car.get_car_wall()
-    car_wheels = car.get_wheel_count()
-    car_load_num = car.get_load_number()
-    car_l_shape = car.get_load_shape()
+    car_num = relevant_car.get_car_number()
+    car_shape = relevant_car.get_car_shape()
+    car_length = relevant_car.get_car_length()
+    car_roof = relevant_car.get_car_roof()
+    car_wall = relevant_car.get_car_wall()
+    car_wheels = relevant_car.get_wheel_count()
+    car_load_num = relevant_car.get_load_number()
+    car_l_shape = relevant_car.get_load_shape()
 
-    variable_names = ["shape", "length", "double", "roof", "wheels", "l_shape", "l_num"]
     variable_values = [car_shape, car_length, car_wall, car_roof, car_wheels, car_l_shape, car_load_num]
     variable_dict = {}
+    #create dict of relevant car and its relevant values
     for i in range(len(variable_values)): 
         variable_dict[variable_names[i]] = variable_values[i]
 
-    all_trains = [train]
+    #actually perform train intervention
     for attr_name in intervene_names:
+        #assumes that deepcopy means that the lists are also deepcopies of the train
+        curr_train = deepcopy(train)
+        curr_car_list = curr_train.get_cars()
+
         curr_attribute_list, curr_dir = interevene_function(attr_name, variable_dict, dir)
         curr_attribute_list = [car_num] + curr_attribute_list
-        all_trains.append(MichalskiTrain([inst_cls(*curr_attribute_list)], curr_dir, angle, scale))
+        curr_car_list[rel_car_idx] = inst_cls(*curr_attribute_list)
+        all_trains.append(MichalskiTrain(curr_car_list, curr_dir, angle, scale))
 
     
 
@@ -382,14 +453,16 @@ def intervene_train(train, intervene_names):
     
 
 
-def read_trains_and_intervene(file, intervene_names, toSimpleObjs=False, scale=(.5, .5, .5)):
+def read_trains_and_intervene(file, intervene_names, toSimpleObjs=False, scale=(.5, .5, .5), relevant_cars = None):
     lines = file
     m_trains = []
 
     if isinstance(file, str):
         with open(file, "r") as a:
             lines = a.readlines()
-    for line in lines:
+
+    
+    for i, line in enumerate(lines):
         m_cars = []
         l = line.split(' ')
         dir = l[0]
@@ -417,8 +490,8 @@ def read_trains_and_intervene(file, intervene_names, toSimpleObjs=False, scale=(
         train = MichalskiTrain(m_cars, dir, t_angle, train_scale)
         if toSimpleObjs is True:
             train.update_pass_indices()
-        # t_angle = get_random_angle(with_occlusion, angle)
-        train = intervene_train(train, intervene_names)
+        #t_angle = get_random_angle(with_occlusion, angle)
+        train = intervene_train(train, intervene_names, rel_car_idx=relevant_cars[i])
         m_trains.append(train)
     return m_trains
 

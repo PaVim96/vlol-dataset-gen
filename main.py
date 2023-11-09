@@ -13,6 +13,14 @@ import argparse
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 
 
+def parse_config(config_name): 
+    import json
+    config = None
+    with open("distribution_configs/{}".format(config_name), "r") as json_file:
+        config = json.load(json_file)
+    return config
+    
+
 def main():
     args = parse()
     # settings general
@@ -20,10 +28,15 @@ def main():
         f"cuda:{args.cuda}" if torch.cuda.is_available() else "cpu")
     tag = args.tag + '/' if args.tag != "" else args.tag
 
+
     # distribution settings
     distribution_config = args.distribution_config
+    parsed_config = parse_config(distribution_config)
+    rel_pth = parsed_config["relevant_car_path"]   
+    rel_cars_path = os.path.join("./car_indexes", rel_pth)
 
     distribution, replace_symbolics = args.distribution, args.replace_symbolics
+    only_combine = args.combine_only
     rule = args.classification
     min_cars, max_cars = args.min_train_length, args.max_train_length
 
@@ -41,10 +54,9 @@ def main():
     start_ind = args.index_start
     end_ind = args.index_end if args.index_end is not None else ds_size
 
-    if False:
-        num_intervens = 7
+    if only_combine:
+        num_intervens = 4
         ds_name = tag + f'{train_vis}_{rule}_{distribution}_{base_scene}_len_{min_cars}-{max_cars}'
-
         combine_json_intervened(ds_name, out_dir=out_path, ds_size=ds_size, interventions = num_intervens)
         return
 
@@ -61,11 +73,24 @@ def main():
               f'the images are set in the {base_scene} background')
 
         # generate raw trains if they do not exist or shall be replaced
+        # additionally if this is executed write list of relevant cars for intervention
         if not os.path.isfile(ds_raw_path) or replace_symbolics:
             gen_raw_trains(distribution, rule, min_cars=min_cars, max_cars=max_cars,
-                           with_occlusion=occ, num_entries=ds_size, out_path=ds_raw_path, distribution_config = distribution_config)
+                           with_occlusion=occ, num_entries=ds_size, out_path=ds_raw_path, distribution_config = distribution_config, rel_cars_path = rel_cars_path)
 
         num_lines = sum(1 for _ in open(ds_raw_path))
+        
+        rel_cars = []
+        try: 
+            with open(rel_cars_path, "r") as rel_file: 
+                for line in rel_file: 
+                    num = int(line.split("\n")[0])
+                    rel_cars.append(num)
+        except: 
+            pass
+
+        if len(rel_cars) != ds_size and min_cars != max_cars: 
+            raise ValueError("Something wrong because were intervening and stuff")
         if num_lines != ds_size:
             raise ValueError(
                 f'defined dataset size: {ds_size}\n'
@@ -79,9 +104,9 @@ def main():
         scale = get_scale(max_cars, auto_zoom)
         # load trains
         #trains = read_trains(ds_raw_path, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
-        intervene_names = ["shape", "length", "l_shape", "l_num"]
+        intervene_names = ["l_shape", "length", "roof", "l_num"]
         num_intervens = len(intervene_names)
-        trains = read_trains_and_intervene(ds_raw_path, intervene_names, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale)
+        trains = read_trains_and_intervene(ds_raw_path, intervene_names, toSimpleObjs=train_vis == 'SimpleObjects', scale=scale, relevant_cars = rel_cars)
         # render trains
         trains = trains[start_ind:end_ind]
         rtpt = RTPT(name_initials='LH', experiment_name=f'gen_{base_scene[:3]}_{train_vis[0]}',
@@ -121,7 +146,6 @@ def main():
         from raw.concept_tester import eval_rule
         eval_rule()
 
-
 def parse():
     # Instantiate the parser
     parser = argparse.ArgumentParser(description='Blender Train Generator')
@@ -146,7 +170,7 @@ def parse():
                              '\'theoryx\', \'easy\', \'color\', \'numerical\', \'multi\', \'complex\', \'custom\'')
     parser.add_argument('--max_train_length', type=int, default=4, help='max number of cars a train can have')
     parser.add_argument('--min_train_length', type=int, default=2, help='min number of cars a train can have')
-    parser.add_argument('--replace_symbolics', type=bool, default=False,
+    parser.add_argument('--replace_symbolics', action="store_true", default=False,
                         help='If the symbolic trains for the dataset are already generated shall they be replaced?'
                              ' If false, it allows to use same trains for multiple generation runs.')
 
@@ -156,36 +180,36 @@ def parse():
                                                                             '\'Trains\' or \'SimpleObjects\'')
     parser.add_argument('--background', type=str, default='base_scene',
                         help='Scene in which the trains are set: base_scene, desert_scene, sky_scene or fisheye_scene')
-    parser.add_argument('--occlusion', type=bool, default=False,
+    parser.add_argument('--occlusion', action="store_true", default=False,
                         help='Whether to include train angles which might lead to occlusion of the individual '
                              'train attributes.')
-    parser.add_argument('--auto_zoom', type=bool, default=False,
+    parser.add_argument('--auto_zoom', action="store_true", default=False,
                         help='Whether to automatically zoom in or out depending on the individual train lengths '
                              ' or fix the zoom of the camera to the max length of the train.')
 
     # Parallelization settings
     parser.add_argument('--index_start', type=int, default=0, help='start rendering images at index')
     parser.add_argument('--index_end', type=int, default=None, help='stop rendering images at index')
-    parser.add_argument('--continue_run', type=bool, default=True,
+    parser.add_argument('--continue_run', action="store_true", default=True,
                         help='Enables parallel generation of one dataset. Uncompleted/aborted runs will be continued. '
                              'If set to False we start a new run and the images generated in tmp folder from previously'
                              ' uncompleted runs (of the same settings) will be deleted.')
 
     # rendering settings
-    parser.add_argument('--save_blender', type=bool, default=False,
+    parser.add_argument('--save_blender', action="store_true", default=False,
                         help='Whether the blender scene is saved')
-    parser.add_argument('--high_res', type=bool, default=False,
+    parser.add_argument('--high_res', action="store_true", default=False,
                         help='whether to render the images in high resolution (1920x1080) or standard resolution '
                              '(480x270)')
-    parser.add_argument('--depth', type=bool, default=False,
+    parser.add_argument('--depth', action="store_true", default=False,
                         help='Whether to generate the depth information of the individual scenes')
 
     parser.add_argument('--command', type=str, default='image_generator',
                         help='whether to generate images \'image_generator\' or execute the concept tester \'ct\' to '
                              'check how many trains are satisfied by a specified rule')
-
+    
+    parser.add_argument("--combine_only", action="store_true", default=False,help="Whether to only combine the data")
     args = parser.parse_args()
-
     return args
 
 

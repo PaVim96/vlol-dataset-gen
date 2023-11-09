@@ -67,17 +67,25 @@ def get_datasets(base_scene, raw_trains, train_vis, class_rule, min_car=2, max_c
 def combine_json_intervened(path_settings, out_dir='output/image_generator', ds_size=10000, interventions = 0):
     path_ori = f'output/tmp/image_generator/{path_settings}'
     path_dest = f'{out_dir}/{path_settings}'
+    print(path_dest)
     im_path = path_ori + '/images'
     if os.path.isdir(im_path):
         files = os.listdir(im_path)
-        if int(len(files) / (interventions + 1)) == ds_size:
+        import ipdb; ipdb.set_trace()
+        if int(len(files) / (interventions + 1)) >= 7500:
             merge_json_files_intervened(path_ori)
+            #dont remove so we can keep generating if we want
+            """ 
             shutil.rmtree(path_ori + '/scenes')
             try:
                 shutil.rmtree(path_dest)
             except:
-                pass
+                pass """
             shutil.move(path_ori, path_dest)
+        else: 
+            print("Number of files lower than desired dataset size")
+    else: 
+        print("Im_path does not exist")
         
 
 
@@ -118,6 +126,11 @@ def merge_json_files_intervened(path):
             return s
         
     files.sort(key = lambda x: custom_sort_key(x))
+
+    #if we are not trying to get all samples for a dataset restrict the dataset files
+    """ if max_ds is not None: 
+        file_nrs = [int(name.split("scenes/")[1].split("_")[0]) for name in files]
+        files = [files[i] for i, sample_nr in enumerate(file_nrs) if sample_nr < max_ds] """
     for p in files:
         with open(p, 'r') as f:
             all_scenes.append(json.load(f))
@@ -134,7 +147,7 @@ def merge_json_files_intervened(path):
     # args.output_scene_file.split('.json')[0]+'_classid_'+str(args.img_class_id)+'.json'
     with open(json_pth, 'w+') as f:
         json.dump(output, f, indent=2)
-        print("DONE")
+        print("DONE GENERATING DATASET")
 
 
 def merge_json_files(path):
